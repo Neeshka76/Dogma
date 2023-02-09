@@ -35,8 +35,8 @@ namespace Dogma
         //Timers
         private float timeInState;
         private float maxTimeInSharpDogmaState = 8f;
-        private float cooldownFromSharpDogmaState = 15f;
-        private float cooldownFromOverchargedDogmaState = 20f;
+        private float cooldownFromSharpDogmaState = 5f;
+        private float cooldownFromOverchargedDogmaState = 10f;
         private float timerCooldown;
         private string damagerSlashDefaultId;
         private string damagerSlashSharpId;
@@ -91,6 +91,10 @@ namespace Dogma
             {
                 maxTimeInSharpDogmaState = resultAudioContainer.sounds[0].length;
             }, "SivaSFX");
+            Catalog.LoadAssetAsync<AudioContainer>("Hitsuu.Dogma.SFXOverheat", resultAudioContainer =>
+            {
+                cooldownFromSharpDogmaState = resultAudioContainer.sounds[0].length + 1f;
+            }, "OverheatSFX");
             // ids for the damagers and the collidergroups
             damagerSlashDefaultId = "DogmaPierceDefault";
             damagerSlashSharpId = "DogmaSlashEnhanced";
@@ -180,7 +184,6 @@ namespace Dogma
                         SFXSivaInstance = SFXSiva.Spawn(item.transform);
                         SFXSivaInstance.Play();
                         EnhanceTheBlade(true);
-                        Debug.Log($"Dogma : 1 nbHands : {nbHandsOnItem}; from {previousState} to {state}");
                         break;
                     }
                     // Happens when the spell wheel button is pressed and it's two handed
@@ -192,7 +195,6 @@ namespace Dogma
                         // Play the sound of Charge
                         SFXChargeInstance = SFXCharge.Spawn(item.transform);
                         SFXChargeInstance.Play();
-                        Debug.Log($"Dogma : 2 nbHands : {nbHandsOnItem}; from {previousState} to {state}");
                         break;
                     }
                     break;
@@ -205,7 +207,6 @@ namespace Dogma
                         // Play the sound of Overheat
                         SFXOverheatInstance = SFXOverheat.Spawn(item.transform);
                         SFXOverheatInstance.Play();
-                        Debug.Log($"Dogma : 3 nbHands : {nbHandsOnItem}; from {previousState} to {state}");
                         break;
                     }
                     break;
@@ -220,7 +221,6 @@ namespace Dogma
                         // Play the sound of Overheat (unused)
                         //SFXOverheatInstance = SFXOverheat.Spawn(item.transform);
                         //SFXOverheatInstance.Play();
-                        Debug.Log($"Dogma : 4 nbHands : {nbHandsOnItem}; from {previousState} to {state}");
                         break;
                     }
                     break;
@@ -247,7 +247,6 @@ namespace Dogma
                         // Play the sound of Restored
                         SFXRestoredInstance = SFXRestored.Spawn(item.transform);
                         SFXRestoredInstance.Play();
-                        Debug.Log($"Dogma : 5 nbHands : {nbHandsOnItem}; from {previousState} to {state}");
                         smokeVFX.Stop();
                         break;
                     }
@@ -350,7 +349,14 @@ namespace Dogma
                 {
                     // It's an explosion force so it's based on a position
                     part.rb.AddExplosionForce(25f, item.transform.position, 10f, 0.5f, ForceMode.VelocityChange);
+                    // Check if it's the hand or feet or head then slice them if it is
+                    if (part.IsImportant() && part.type != RagdollPart.Type.Torso)
+                    {
+                        creature.ragdoll.TrySlice(part);
+                    }
                 }
+                // Forcefully kill the creature
+                creature.Kill();
             }
         }
     }
