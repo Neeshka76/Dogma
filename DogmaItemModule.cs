@@ -1,12 +1,12 @@
 ﻿using JetBrains.Annotations;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using ThunderRoad;
 using UnityEngine;
-using static ThunderRoad.ItemMagicAreaProjectile;
 
 namespace Dogma
 {
@@ -56,6 +56,11 @@ namespace Dogma
         private EffectInstance SFXSivaInstance;
         private ParticleSystem trailVFX;
         private ParticleSystem smokeVFX;
+        private ParticleSystem eSmokeVFX;
+        private ParticleSystem overchargeVFX;
+        private Color originalColor;
+        private Color overheatColor = new Color(255f, 67f, 0f);
+        private Material materialItem;
         // Used to differentiate the states of the sword
         private enum DogmaState
         {
@@ -93,7 +98,7 @@ namespace Dogma
             }, "SivaSFX");
             Catalog.LoadAssetAsync<AudioContainer>("Hitsuu.Dogma.SFXOverheat", resultAudioContainer =>
             {
-                cooldownFromSharpDogmaState = resultAudioContainer.sounds[0].length + 1f;
+                cooldownFromSharpDogmaState = resultAudioContainer.sounds[0].length;
             }, "OverheatSFX");
             // ids for the damagers and the collidergroups
             damagerSlashDefaultId = "DogmaPierceDefault";
@@ -102,12 +107,20 @@ namespace Dogma
             damagerPierceSharpId = "DogmaPierceEnhanced";
             colliderGroupDefaultName = "BladeDogmaDefault";
             colliderGroupSharpName = "BladeDogmaEnhanced";
-            // Get the reference of the smoke to play the trail
+            // Get the reference of the effect to play the trail effect
             trailVFX = item.GetCustomReference<ParticleSystem>("Trail");
             trailVFX.Stop();
-            // Get the reference of the smoke to play the effect
+            // Get the reference of the effect to play the smoke effect
             smokeVFX = item.GetCustomReference<ParticleSystem>("Smoke");
             smokeVFX.Stop();
+            // Get the reference of the effect to play the explosion smoke effect
+            eSmokeVFX = item.GetCustomReference<ParticleSystem>("ESmoke");
+            eSmokeVFX.Stop();
+            // Get the reference of the effect to play the overcharge effect
+            overchargeVFX = item.GetCustomReference<ParticleSystem>("Overcharge");
+            overchargeVFX.Stop();
+            materialItem = item.renderers[0].material;
+            originalColor = materialItem.GetColor("_EmissionColor");
         }
         /// <summary>
         /// This is called when the item is despawn, used mainly to unsubscribe the events
@@ -184,7 +197,6 @@ namespace Dogma
                         SFXSivaInstance = SFXSiva.Spawn(item.transform);
                         SFXSivaInstance.Play();
                         EnhanceTheBlade(true);
-                        break;
                     }
                     // Happens when the spell wheel button is pressed and it's two handed
                     if (nbHandsOnItem > 1 && buttonActionPressed)
@@ -195,7 +207,8 @@ namespace Dogma
                         // Play the sound of Charge
                         SFXChargeInstance = SFXCharge.Spawn(item.transform);
                         SFXChargeInstance.Play();
-                        break;
+                        // Play VFX Overcharging
+                        overchargeVFX.Play();
                     }
                     break;
                 // Will execute this every time the state is Sharp
@@ -207,21 +220,25 @@ namespace Dogma
                         // Play the sound of Overheat
                         SFXOverheatInstance = SFXOverheat.Spawn(item.transform);
                         SFXOverheatInstance.Play();
-                        break;
                     }
                     break;
                 // Will execute this every time the state is Overcharged
                 case DogmaState.Overcharged:
+                    // Make the weapon glowing between the original color and the overheat color (Orange/Red)
+                    materialItem.SetColor("_EmissionColor", Color.Lerp(originalColor, overheatColor, Mathf.PingPong(timeInState, 1.5f) / 1.5f));
                     // it needs to have the button released before being pressed again to trigger the explosion
                     if (buttonActionPressed && !buttonActionPressedEnteringState)
                     {
+                        // Stop VFX Overcharging
+                        overchargeVFX.Stop();
                         // Call the Explosion method
                         ExplosionOvercharged();
                         SwitchDogmaState(DogmaState.Coolingdown);
                         // Play the sound of Overheat (unused)
                         //SFXOverheatInstance = SFXOverheat.Spawn(item.transform);
                         //SFXOverheatInstance.Play();
-                        break;
+                        // Start a coroutine that will fade back to the original color
+                        StartCoroutine(ChangeColor(originalColor));
                     }
                     break;
                 // Will execute this every time the state is Coolingdown
@@ -231,14 +248,17 @@ namespace Dogma
                     {
                         timerCooldown = cooldownFromSharpDogmaState;
                         EnhanceTheBlade(false);
+                        // Play the VFX of the cooldown mod
+                        smokeVFX.Play();
                     }
                     // If comes from the Overcharged mode, set the correct timer
                     if (previousState == DogmaState.Overcharged)
                     {
                         timerCooldown = cooldownFromOverchargedDogmaState;
+                        eSmokeVFX.Play();
                     }
-                    // Play the VFX of the cooldown mod
-                    smokeVFX.Play();
+
+
                     // End of the cooldown
                     if (timeInState > timerCooldown)
                     {
@@ -247,12 +267,37 @@ namespace Dogma
                         // Play the sound of Restored
                         SFXRestoredInstance = SFXRestored.Spawn(item.transform);
                         SFXRestoredInstance.Play();
-                        smokeVFX.Stop();
-                        break;
+                        if (smokeVFX.isPlaying)
+                            smokeVFX.Stop();
+                        if(eSmokeVFX.isPlaying)
+                            eSmokeVFX.Stop();
                     }
                     break;
             }
         }
+        /// <summary>
+        /// This allow to change color with a smooth blend
+        /// </summary>
+        /// <param name="newColor"></param>
+        /// <returns></returns>
+        public IEnumerator ChangeColor(Color newColor)
+        {
+            float tts = 1.5f;
+            float timeElapsed = 0f;
+            Color toHitC = newColor;
+            // Save the current emission color
+            Color CurrentC = materialItem.GetColor("_EmissionColor");
+            while (timeElapsed <= tts)
+            {
+                // lerp the value from the current color to the value you want (toHitC)
+                materialItem.SetColor("_EmissionColor", Color.Lerp(CurrentC, toHitC, timeElapsed / tts));
+                timeElapsed += Time.deltaTime;
+                yield return null;
+            }
+            materialItem.SetColor("_EmissionColor", newColor);
+            yield break;
+        }
+
         /// <summary>
         /// Switch the DogmaState with the newState passed in parameter and memorise the previous state then reset the timer counting the time in the state to zero
         /// </summary>
