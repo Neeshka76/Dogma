@@ -1,10 +1,6 @@
-﻿using JetBrains.Annotations;
-using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using ThunderRoad;
 using UnityEngine;
 
@@ -59,7 +55,7 @@ namespace Dogma
         private ParticleSystem eSmokeVFX;
         private ParticleSystem overchargeVFX;
         private Color originalColor;
-        private Color overheatColor = new Color(255f, 67f, 0f);
+        private Color overheatColor = Snippet.HDRColor(new Color(255f, 67f, 0f) / 255f, 3f);
         private Material materialItem;
         // Used to differentiate the states of the sword
         private enum DogmaState
@@ -393,7 +389,7 @@ namespace Dogma
                 foreach (RagdollPart part in creature.ragdoll.parts)
                 {
                     // It's an explosion force so it's based on a position
-                    part.rb.AddExplosionForce(25f, item.transform.position, 10f, 0.5f, ForceMode.VelocityChange);
+                    part.physicBody.AddExplosionForce(25f, item.transform.position, 10f, 0.5f, ForceMode.VelocityChange);
                     // Check if it's the hand or feet or head then slice them if it is
                     if (part.IsImportant() && part.type != RagdollPart.Type.Torso)
                     {
